@@ -249,6 +249,40 @@ where
     }
 }
 
+/// Represents a Spark CalendarInterval literal value.
+///
+/// CalendarInterval stores a duration as months, days, and microseconds.
+#[derive(Clone, Debug)]
+pub struct CalendarIntervalLiteral {
+    pub months: i32,
+    pub days: i32,
+    pub microseconds: i64,
+}
+
+impl CalendarIntervalLiteral {
+    pub fn new(months: i32, days: i32, microseconds: i64) -> Self {
+        Self {
+            months,
+            days,
+            microseconds,
+        }
+    }
+}
+
+impl From<CalendarIntervalLiteral> for spark::expression::Literal {
+    fn from(value: CalendarIntervalLiteral) -> Self {
+        spark::expression::Literal {
+            literal_type: Some(spark::expression::literal::LiteralType::CalendarInterval(
+                spark::expression::literal::CalendarInterval {
+                    months: value.months,
+                    days: value.days,
+                    microseconds: value.microseconds,
+                },
+            )),
+        }
+    }
+}
+
 impl From<&str> for spark::expression::cast::CastToType {
     fn from(value: &str) -> Self {
         spark::expression::cast::CastToType::TypeStr(value.to_string())
@@ -264,5 +298,24 @@ impl From<String> for spark::expression::cast::CastToType {
 impl From<DataType> for spark::expression::cast::CastToType {
     fn from(value: DataType) -> spark::expression::cast::CastToType {
         spark::expression::cast::CastToType::Type(value.into())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_calendar_interval_literal() {
+        let interval = CalendarIntervalLiteral::new(12, 5, 1_000_000);
+        let literal: spark::expression::Literal = interval.into();
+        match literal.literal_type {
+            Some(spark::expression::literal::LiteralType::CalendarInterval(ci)) => {
+                assert_eq!(ci.months, 12);
+                assert_eq!(ci.days, 5);
+                assert_eq!(ci.microseconds, 1_000_000);
+            }
+            _ => panic!("Expected CalendarInterval literal"),
+        }
     }
 }
