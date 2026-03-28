@@ -249,6 +249,22 @@ where
     }
 }
 
+/// Represents a Spark DayTimeInterval literal value.
+///
+/// Stores the interval as a total number of microseconds.
+#[derive(Clone, Debug)]
+pub struct DayTimeIntervalLiteral(pub i64);
+
+impl From<DayTimeIntervalLiteral> for spark::expression::Literal {
+    fn from(value: DayTimeIntervalLiteral) -> Self {
+        spark::expression::Literal {
+            literal_type: Some(spark::expression::literal::LiteralType::DayTimeInterval(
+                value.0,
+            )),
+        }
+    }
+}
+
 impl From<&str> for spark::expression::cast::CastToType {
     fn from(value: &str) -> Self {
         spark::expression::cast::CastToType::TypeStr(value.to_string())
@@ -264,5 +280,23 @@ impl From<String> for spark::expression::cast::CastToType {
 impl From<DataType> for spark::expression::cast::CastToType {
     fn from(value: DataType) -> spark::expression::cast::CastToType {
         spark::expression::cast::CastToType::Type(value.into())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_day_time_interval_literal() {
+        // 1 day in microseconds
+        let interval = DayTimeIntervalLiteral(86_400_000_000);
+        let literal: spark::expression::Literal = interval.into();
+        assert_eq!(
+            literal.literal_type,
+            Some(spark::expression::literal::LiteralType::DayTimeInterval(
+                86_400_000_000
+            ))
+        );
     }
 }
