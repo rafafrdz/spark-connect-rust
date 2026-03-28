@@ -249,6 +249,40 @@ where
     }
 }
 
+/// Represents a Spark Decimal literal value.
+///
+/// Used with [`lit`](crate::functions::lit) to create a decimal column literal.
+#[derive(Clone, Debug)]
+pub struct SparkDecimal {
+    pub value: String,
+    pub precision: Option<i32>,
+    pub scale: Option<i32>,
+}
+
+impl SparkDecimal {
+    pub fn new(value: impl Into<String>, precision: Option<i32>, scale: Option<i32>) -> Self {
+        Self {
+            value: value.into(),
+            precision,
+            scale,
+        }
+    }
+}
+
+impl From<SparkDecimal> for spark::expression::Literal {
+    fn from(value: SparkDecimal) -> Self {
+        spark::expression::Literal {
+            literal_type: Some(spark::expression::literal::LiteralType::Decimal(
+                spark::expression::literal::Decimal {
+                    value: value.value,
+                    precision: value.precision,
+                    scale: value.scale,
+                },
+            )),
+        }
+    }
+}
+
 impl From<&str> for spark::expression::cast::CastToType {
     fn from(value: &str) -> Self {
         spark::expression::cast::CastToType::TypeStr(value.to_string())
@@ -264,5 +298,38 @@ impl From<String> for spark::expression::cast::CastToType {
 impl From<DataType> for spark::expression::cast::CastToType {
     fn from(value: DataType) -> spark::expression::cast::CastToType {
         spark::expression::cast::CastToType::Type(value.into())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_decimal_literal() {
+        let decimal = SparkDecimal::new("123.45", Some(10), Some(2));
+        let literal: spark::expression::Literal = decimal.into();
+        match literal.literal_type {
+            Some(spark::expression::literal::LiteralType::Decimal(d)) => {
+                assert_eq!(d.value, "123.45");
+                assert_eq!(d.precision, Some(10));
+                assert_eq!(d.scale, Some(2));
+            }
+            _ => panic!("Expected Decimal literal"),
+        }
+    }
+
+    #[test]
+    fn test_decimal_literal_defaults() {
+        let decimal = SparkDecimal::new("99", None, None);
+        let literal: spark::expression::Literal = decimal.into();
+        match literal.literal_type {
+            Some(spark::expression::literal::LiteralType::Decimal(d)) => {
+                assert_eq!(d.value, "99");
+                assert_eq!(d.precision, None);
+                assert_eq!(d.scale, None);
+            }
+            _ => panic!("Expected Decimal literal"),
+        }
     }
 }
