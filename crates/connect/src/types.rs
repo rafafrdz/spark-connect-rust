@@ -584,6 +584,7 @@ impl_to_proto_type!(f32, Float);
 impl_to_proto_type!(f64, Double);
 impl_to_proto_type!(&str, String);
 impl_to_proto_type!(String, String);
+impl_to_proto_type!(i8, Byte);
 
 impl From<&[u8]> for spark::DataType {
     fn from(_value: &[u8]) -> spark::DataType {

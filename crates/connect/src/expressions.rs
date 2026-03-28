@@ -152,6 +152,14 @@ impl From<i16> for spark::expression::Literal {
     }
 }
 
+impl From<i8> for spark::expression::Literal {
+    fn from(value: i8) -> Self {
+        spark::expression::Literal {
+            literal_type: Some(spark::expression::literal::LiteralType::Byte(value as i32)),
+        }
+    }
+}
+
 impl<'a> From<&'a str> for spark::expression::Literal {
     fn from(value: &'a str) -> Self {
         spark::expression::Literal {
@@ -264,5 +272,30 @@ impl From<String> for spark::expression::cast::CastToType {
 impl From<DataType> for spark::expression::cast::CastToType {
     fn from(value: DataType) -> spark::expression::cast::CastToType {
         spark::expression::cast::CastToType::Type(value.into())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_i8_to_byte_literal() {
+        let val: i8 = 42;
+        let literal: spark::expression::Literal = val.into();
+        assert_eq!(
+            literal.literal_type,
+            Some(spark::expression::literal::LiteralType::Byte(42))
+        );
+    }
+
+    #[test]
+    fn test_i8_negative_to_byte_literal() {
+        let val: i8 = -128;
+        let literal: spark::expression::Literal = val.into();
+        assert_eq!(
+            literal.literal_type,
+            Some(spark::expression::literal::LiteralType::Byte(-128))
+        );
     }
 }
