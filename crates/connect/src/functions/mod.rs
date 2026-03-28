@@ -108,6 +108,16 @@ pub fn lit(col: impl Into<Literal>) -> Column {
     Column::from(col.into())
 }
 
+/// Creates a [Column] of null [spark::expression::Literal] value.
+pub fn lit_null() -> Column {
+    let literal = spark::expression::Literal {
+        literal_type: Some(spark::expression::literal::LiteralType::Null(
+            crate::types::DataType::Null.to_proto_type(),
+        )),
+    };
+    Column::from(literal)
+}
+
 /// Marks a DataFrame as small enough for use in broadcast joins.
 pub fn broadcast(df: DataFrame) -> DataFrame {
     df.hint::<Vec<String>>("broadcast", None)
@@ -1718,6 +1728,20 @@ mod tests {
                 Ok(())
             }
         };
+    }
+
+    #[test]
+    fn test_lit_null() {
+        let col = lit_null();
+        match col.expression.expr_type {
+            Some(spark::expression::ExprType::Literal(ref lit)) => {
+                assert!(matches!(
+                    lit.literal_type,
+                    Some(spark::expression::literal::LiteralType::Null(_))
+                ));
+            }
+            _ => panic!("Expected literal expression"),
+        }
     }
 
     // normal functions

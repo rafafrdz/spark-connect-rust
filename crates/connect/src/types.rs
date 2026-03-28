@@ -288,10 +288,25 @@ pub enum DataType {
 impl DataType {
     pub fn from_str_name(value: &str) -> DataType {
         match value.to_lowercase().as_str() {
+            "null" | "void" => DataType::Null,
+            "binary" => DataType::Binary,
             "bool" | "boolean" => DataType::Boolean,
+            "byte" | "tinyint" => DataType::Byte,
+            "short" | "smallint" => DataType::Short,
             "int" | "integer" => DataType::Integer,
+            "long" | "bigint" => DataType::Long,
+            "float" => DataType::Float,
+            "double" => DataType::Double,
+            "decimal" => DataType::Decimal {
+                scale: None,
+                precision: None,
+            },
             "str" | "string" => DataType::String,
-            _ => unimplemented!("not implemented"),
+            "date" => DataType::Date,
+            "timestamp" => DataType::Timestamp,
+            "timestamp_ntz" => DataType::TimestampNtz,
+            "interval" | "calendar_interval" => DataType::CalendarInterval,
+            _ => unimplemented!("DataType '{}' is not supported", value),
         }
     }
 
@@ -713,5 +728,48 @@ mod tests {
             .into();
 
         assert_eq!(expected, schema.json());
+    }
+
+    #[test]
+    fn test_from_str_name() {
+        assert!(matches!(DataType::from_str_name("null"), DataType::Null));
+        assert!(matches!(DataType::from_str_name("void"), DataType::Null));
+        assert!(matches!(
+            DataType::from_str_name("boolean"),
+            DataType::Boolean
+        ));
+        assert!(matches!(DataType::from_str_name("byte"), DataType::Byte));
+        assert!(matches!(DataType::from_str_name("short"), DataType::Short));
+        assert!(matches!(
+            DataType::from_str_name("integer"),
+            DataType::Integer
+        ));
+        assert!(matches!(DataType::from_str_name("long"), DataType::Long));
+        assert!(matches!(DataType::from_str_name("float"), DataType::Float));
+        assert!(matches!(
+            DataType::from_str_name("double"),
+            DataType::Double
+        ));
+        assert!(matches!(
+            DataType::from_str_name("string"),
+            DataType::String
+        ));
+        assert!(matches!(DataType::from_str_name("date"), DataType::Date));
+        assert!(matches!(
+            DataType::from_str_name("timestamp"),
+            DataType::Timestamp
+        ));
+        assert!(matches!(
+            DataType::from_str_name("timestamp_ntz"),
+            DataType::TimestampNtz
+        ));
+        assert!(matches!(
+            DataType::from_str_name("binary"),
+            DataType::Binary
+        ));
+        assert!(matches!(
+            DataType::from_str_name("decimal"),
+            DataType::Decimal { .. }
+        ));
     }
 }
