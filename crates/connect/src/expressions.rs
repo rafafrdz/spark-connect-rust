@@ -249,6 +249,22 @@ where
     }
 }
 
+/// Represents a Spark YearMonthInterval literal value.
+///
+/// Stores the interval as a total number of months.
+#[derive(Clone, Debug)]
+pub struct YearMonthIntervalLiteral(pub i32);
+
+impl From<YearMonthIntervalLiteral> for spark::expression::Literal {
+    fn from(value: YearMonthIntervalLiteral) -> Self {
+        spark::expression::Literal {
+            literal_type: Some(spark::expression::literal::LiteralType::YearMonthInterval(
+                value.0,
+            )),
+        }
+    }
+}
+
 impl From<&str> for spark::expression::cast::CastToType {
     fn from(value: &str) -> Self {
         spark::expression::cast::CastToType::TypeStr(value.to_string())
@@ -264,5 +280,22 @@ impl From<String> for spark::expression::cast::CastToType {
 impl From<DataType> for spark::expression::cast::CastToType {
     fn from(value: DataType) -> spark::expression::cast::CastToType {
         spark::expression::cast::CastToType::Type(value.into())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_year_month_interval_literal() {
+        let interval = YearMonthIntervalLiteral(18);
+        let literal: spark::expression::Literal = interval.into();
+        assert_eq!(
+            literal.literal_type,
+            Some(spark::expression::literal::LiteralType::YearMonthInterval(
+                18
+            ))
+        );
     }
 }
