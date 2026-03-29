@@ -382,6 +382,26 @@ impl Column {
         invoke_func("or", vec![self, other.into()])
     }
 
+    /// Returns a boolean column for `self > other`.
+    pub fn gt(self, other: impl Into<Column>) -> Column {
+        invoke_func(">", vec![self, other.into()])
+    }
+
+    /// Returns a boolean column for `self < other`.
+    pub fn lt(self, other: impl Into<Column>) -> Column {
+        invoke_func("<", vec![self, other.into()])
+    }
+
+    /// Returns a boolean column for `self >= other`.
+    pub fn ge(self, other: impl Into<Column>) -> Column {
+        invoke_func(">=", vec![self, other.into()])
+    }
+
+    /// Returns a boolean column for `self <= other`.
+    pub fn le(self, other: impl Into<Column>) -> Column {
+        invoke_func("<=", vec![self, other.into()])
+    }
+
     /// A filter expression that evaluates to true is the expression is null
     pub fn is_null(self) -> Column {
         invoke_func("isnull", vec![self])
@@ -566,5 +586,59 @@ impl Not for Column {
 
     fn not(self) -> Self::Output {
         invoke_func("not", vec![self])
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::functions::{col, lit};
+    use crate::spark;
+
+    #[test]
+    fn test_column_gt() {
+        let col = col("age").gt(lit(27));
+        match col.expression.expr_type {
+            Some(spark::expression::ExprType::UnresolvedFunction(ref f)) => {
+                assert_eq!(f.function_name, ">");
+                assert_eq!(f.arguments.len(), 2);
+            }
+            _ => panic!("Expected UnresolvedFunction for gt"),
+        }
+    }
+
+    #[test]
+    fn test_column_lt() {
+        let col = col("age").lt(lit(27));
+        match col.expression.expr_type {
+            Some(spark::expression::ExprType::UnresolvedFunction(ref f)) => {
+                assert_eq!(f.function_name, "<");
+                assert_eq!(f.arguments.len(), 2);
+            }
+            _ => panic!("Expected UnresolvedFunction for lt"),
+        }
+    }
+
+    #[test]
+    fn test_column_ge() {
+        let col = col("age").ge(lit(27));
+        match col.expression.expr_type {
+            Some(spark::expression::ExprType::UnresolvedFunction(ref f)) => {
+                assert_eq!(f.function_name, ">=");
+                assert_eq!(f.arguments.len(), 2);
+            }
+            _ => panic!("Expected UnresolvedFunction for ge"),
+        }
+    }
+
+    #[test]
+    fn test_column_le() {
+        let col = col("age").le(lit(27));
+        match col.expression.expr_type {
+            Some(spark::expression::ExprType::UnresolvedFunction(ref f)) => {
+                assert_eq!(f.function_name, "<=");
+                assert_eq!(f.arguments.len(), 2);
+            }
+            _ => panic!("Expected UnresolvedFunction for le"),
+        }
     }
 }
