@@ -1,0 +1,196 @@
+# Licensed to the Apache Software Foundation (ASF) under one
+# or more contributor license agreements.  See the NOTICE file
+# distributed with this work for additional information
+# regarding copyright ownership.  The ASF licenses this file
+# to you under the Apache License, Version 2.0 (the
+# "License"); you may not use this file except in compliance
+# with the License.  You may obtain a copy of the License at
+#
+#   http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+# KIND, either express or implied.  See the License for the
+# specific language governing permissions and limitations
+# under the License.
+
+name: CI
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [master, dev, "v*"]
+  pull_request:
+    branches: [master, dev, "v*"]
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: "1"
+
+jobs:
+  # Fast checks — no Spark server needed
+  lint:
+    name: Lint & Format
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: "true"
+
+      - name: Install protoc
+        uses: arduino/setup-protoc@v3
+        with:
+          version: 23.x
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Check formatting
+        run: cargo fmt -- --check
+
+      - name: Clippy (default features)
+        run: cargo clippy -p spark-connect-rs -- -D warnings
+
+      - name: Clippy (all features)
+        run: cargo clippy -p spark-connect-rs --features polars,datafusion -- -D warnings
+
+  # Unit tests — no Spark server needed
+  unit-tests:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        features:
+          - ""
+          - "--features polars"
+          - "--features datafusion"
+          - "--features polars,datafusion"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: "true"
+
+      - name: Install protoc
+        uses: arduino/setup-protoc@v3
+        with:
+          version: 23.x
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Build
+        run: cargo build -p spark-connect-rs ${{ matrix.features }}
+
+      - name: Run unit tests
+        run: cargo test -p spark-connect-rs ${{ matrix.features }} 2>&1 | tee test-output.txt; exit ${PIPESTATUS[0]}
+        continue-on-error: true
+
+      - name: Check unit test results
+        run: |
+          # Extract test results - unit tests should pass, integration tests fail (no server)
+          PASSED=$(grep -oP '\d+ passed' test-output.txt | head -1 | grep -oP '\d+')
+          FAILED=$(grep -oP '\d+ failed' test-output.txt | head -1 | grep -oP '\d+')
+          echo "Passed: $PASSED, Failed: $FAILED"
+
+          # Count how many failures are transport errors (expected without Spark server)
+          TRANSPORT_FAILURES=$(grep -c 'transport error\|Connection refused' test-output.txt || true)
+          echo "Transport failures (expected): $TRANSPORT_FAILURES"
+
+          # If there are non-transport failures, that's a real problem
+          if [ "$FAILED" -gt 0 ] && [ "$TRANSPORT_FAILURES" -lt "$FAILED" ]; then
+            echo "::error::Found non-transport test failures!"
+            grep 'FAILED' test-output.txt
+            exit 1
+          fi
+
+          if [ "$PASSED" -lt 1 ]; then
+            echo "::error::No tests passed - something is wrong"
+            exit 1
+          fi
+
+          echo "✓ All $PASSED unit tests passed ($TRANSPORT_FAILURES integration tests skipped - no Spark server)"
+
+  # Documentation build check
+  docs:
+    name: Documentation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: "true"
+
+      - name: Install protoc
+        uses: arduino/setup-protoc@v3
+        with:
+          version: 23.x
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Build docs
+        run: cargo doc -p spark-connect-rs --no-deps
+        env:
+          RUSTDOCFLAGS: "-D warnings"
+
+  # Full integration tests with Spark Connect server
+  integration-tests:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+    env:
+      CARGO_INCREMENTAL: 0
+      RUSTFLAGS: "-C debuginfo=line-tables-only"
+      CARGO_NET_GIT_FETCH_WITH_CLI: "true"
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: "true"
+
+      - name: Install protoc
+        uses: arduino/setup-protoc@v3
+        with:
+          version: 23.x
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Start Spark Connect server
+        run: docker compose up -d
+
+      - name: Wait for Spark Connect server
+        run: |
+          echo "Waiting for Spark Connect server on port 15002..."
+          for i in $(seq 1 60); do
+            if nc -z localhost 15002 2>/dev/null; then
+              echo "Spark Connect server is ready!"
+              break
+            fi
+            if [ $i -eq 60 ]; then
+              echo "::error::Spark Connect server failed to start within 60 seconds"
+              docker compose logs
+              exit 1
+            fi
+            sleep 2
+          done
+
+      - name: Run integration tests
+        run: cargo test -p spark-connect-rs --features polars,datafusion
+
+      - name: Show Spark logs on failure
+        if: failure()
+        run: docker compose logs
+
+      - name: Stop Spark Connect server
+        if: always()
+        run: docker compose down
