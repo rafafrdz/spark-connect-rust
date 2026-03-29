@@ -36,6 +36,7 @@ use spark::relation::RelType;
 pub use spark::write_operation::SaveMode;
 
 use arrow::array::PrimitiveArray;
+use arrow::array::{Array, StringArray};
 use arrow::datatypes::{DataType, Float64Type};
 use arrow::json::ArrayWriter;
 use arrow::record_batch::RecordBatch;
@@ -1151,6 +1152,15 @@ impl DataFrame {
         let plan = LogicalPlanBuilder::from(show_expr).plan_root();
 
         let rows = self.spark_session.client().to_arrow(plan).await?;
+
+        // ShowString returns a single-column RecordBatch with the formatted table as a string.
+        // Extract and print the string directly instead of wrapping it in another table.
+        if let Some(arr) = rows.column(0).as_any().downcast_ref::<StringArray>() {
+            if arr.len() > 0 {
+                println!("{}", arr.value(0));
+                return Ok(());
+            }
+        }
 
         Ok(pretty::print_batches(&[rows])?)
     }
