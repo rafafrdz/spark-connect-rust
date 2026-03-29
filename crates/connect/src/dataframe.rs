@@ -730,7 +730,27 @@ impl DataFrame {
         DataFrameNaFunctions::new(self)
     }
 
-    // !TODO observe
+    /// Define (named) metrics to observe on the DataFrame.
+    ///
+    /// This method attaches metric expressions to the query plan. The metrics
+    /// are computed during query execution and can be retrieved from the
+    /// execution metrics.
+    ///
+    /// # Arguments
+    /// * `name` - Name of the observation
+    /// * `exprs` - Metric expressions (e.g., `count(lit(1))`, `avg(col("value"))`)
+    pub fn observe<I>(self, name: &str, exprs: I) -> DataFrame
+    where
+        I: IntoIterator,
+        I::Item: Into<Column>,
+    {
+        let plan = self.plan.observe(name, exprs);
+
+        DataFrame {
+            spark_session: self.spark_session,
+            plan,
+        }
+    }
 
     /// Returns a new [DataFrame] by skiping the first n rows
     pub fn offset(self, num: i32) -> DataFrame {

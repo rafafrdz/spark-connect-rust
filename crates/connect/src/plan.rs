@@ -516,6 +516,23 @@ impl LogicalPlanBuilder {
         LogicalPlanBuilder::from(hint_rel)
     }
 
+    pub fn observe<I>(self, name: &str, exprs: I) -> LogicalPlanBuilder
+    where
+        I: IntoIterator,
+        I::Item: Into<Column>,
+    {
+        let metrics: Vec<spark::Expression> =
+            exprs.into_iter().map(|e| e.into().expression).collect();
+
+        let collect_metrics = RelType::CollectMetrics(Box::new(spark::CollectMetrics {
+            input: self.relation_input(),
+            name: name.to_string(),
+            metrics,
+        }));
+
+        LogicalPlanBuilder::from(collect_metrics)
+    }
+
     pub fn join<'a, T, I>(
         self,
         right: LogicalPlanBuilder,
