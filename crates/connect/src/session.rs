@@ -354,6 +354,56 @@ impl SparkSession {
         self.client
     }
 
+    /// Upload a local file (JAR, Python file, etc.) to the Spark cluster.
+    ///
+    /// The file will be available in the session for use by Spark jobs.
+    ///
+    /// # Arguments
+    /// * `local_path` - Path to the local file to upload
+    /// * `remote_name` - Name/path for the artifact on the server (e.g., "jars/my-lib.jar")
+    pub async fn add_artifact(
+        &self,
+        local_path: &str,
+        remote_name: &str,
+    ) -> Result<spark::AddArtifactsResponse, SparkError> {
+        let data = std::fs::read(local_path)?;
+
+        let chunk = spark::add_artifacts_request::ArtifactChunk { data, crc: 0 };
+
+        let artifact = spark::add_artifacts_request::SingleChunkArtifact {
+            name: remote_name.to_string(),
+            data: Some(chunk),
+        };
+
+        self.client.add_artifacts(vec![artifact]).await
+    }
+
+    /// Upload multiple local files to the Spark cluster in a single batch.
+    ///
+    /// Each entry is a tuple of `(local_path, remote_name)`.
+    ///
+    /// # Arguments
+    /// * `artifacts` - A slice of `(local_path, remote_name)` tuples
+    pub async fn add_artifacts(
+        &self,
+        artifacts: &[(&str, &str)],
+    ) -> Result<spark::AddArtifactsResponse, SparkError> {
+        let mut single_chunks = Vec::with_capacity(artifacts.len());
+
+        for (local_path, remote_name) in artifacts {
+            let data = std::fs::read(local_path)?;
+
+            let chunk = spark::add_artifacts_request::ArtifactChunk { data, crc: 0 };
+
+            single_chunks.push(spark::add_artifacts_request::SingleChunkArtifact {
+                name: remote_name.to_string(),
+                data: Some(chunk),
+            });
+        }
+
+        self.client.add_artifacts(single_chunks).await
+    }
+
     /// Interrupt all operations of this session currently running on the connected server.
     pub async fn interrupt_all(&self) -> Result<Vec<String>, SparkError> {
         let resp = self
