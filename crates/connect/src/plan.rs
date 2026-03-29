@@ -289,7 +289,9 @@ impl LogicalPlanBuilder {
         let mut min_non_nulls = match how {
             "all" => Some(1),
             "any" => None,
-            &_ => panic!("'how' arg needs to be 'all' or 'any'"),
+            &_ => {
+                panic!("'how' argument must be 'all' or 'any', got '{}'", how)
+            }
         };
 
         if let Some(threshold) = threshold {
@@ -850,8 +852,8 @@ where
     VecExpression::from_iter(cols)
         .expr
         .into_iter()
-        .map(|col| match col.expr_type.clone().unwrap() {
-            spark::expression::ExprType::SortOrder(ord) => *ord,
+        .map(|col| match col.expr_type.clone() {
+            Some(spark::expression::ExprType::SortOrder(ord)) => *ord,
             _ => spark::expression::SortOrder {
                 child: Some(Box::new(col)),
                 direction: 1,

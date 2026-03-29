@@ -44,7 +44,11 @@ impl Catalog {
 
         let data: &arrow::array::BooleanArray = match col.data_type() {
             arrow::datatypes::DataType::Boolean => col.as_boolean(),
-            _ => unimplemented!("only Boolean data types are currently handled currently."),
+            _ => {
+                return Err(SparkError::NotYetImplemented(
+                    "only Boolean data types are currently handled".to_string(),
+                ))
+            }
         };
 
         Ok(data.value(0))

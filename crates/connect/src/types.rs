@@ -18,6 +18,7 @@
 //! Rust Types to Spark Types
 #![allow(dead_code)]
 
+use crate::errors::SparkError;
 use crate::spark;
 
 /// Represents basic methods for a [SparkDataType]
@@ -286,12 +287,30 @@ pub enum DataType {
 }
 
 impl DataType {
-    pub fn from_str_name(value: &str) -> DataType {
+    pub fn from_str_name(value: &str) -> Result<DataType, SparkError> {
         match value.to_lowercase().as_str() {
-            "bool" | "boolean" => DataType::Boolean,
-            "int" | "integer" => DataType::Integer,
-            "str" | "string" => DataType::String,
-            _ => unimplemented!("not implemented"),
+            "null" | "void" => Ok(DataType::Null),
+            "binary" => Ok(DataType::Binary),
+            "bool" | "boolean" => Ok(DataType::Boolean),
+            "byte" | "tinyint" => Ok(DataType::Byte),
+            "short" | "smallint" => Ok(DataType::Short),
+            "int" | "integer" => Ok(DataType::Integer),
+            "long" | "bigint" => Ok(DataType::Long),
+            "float" => Ok(DataType::Float),
+            "double" => Ok(DataType::Double),
+            "decimal" => Ok(DataType::Decimal {
+                scale: None,
+                precision: None,
+            }),
+            "str" | "string" => Ok(DataType::String),
+            "date" => Ok(DataType::Date),
+            "timestamp" => Ok(DataType::Timestamp),
+            "timestamp_ntz" => Ok(DataType::TimestampNtz),
+            "interval" | "calendar_interval" => Ok(DataType::CalendarInterval),
+            _ => Err(SparkError::NotYetImplemented(format!(
+                "DataType '{}' is not supported",
+                value
+            ))),
         }
     }
 
@@ -501,7 +520,7 @@ impl SparkDataType for DataType {
                     (0, 1) => String::from("interval month to year"),
                     (1, 1) => String::from("interval month"),
                     (1, 0) => String::from("interval year to month"),
-                    (_, _) => unimplemented!("Invalid YearMonthInterval"),
+                    (_, _) => String::from("interval year"),
                 }
             }
             Self::DayTimeInterval {
@@ -527,7 +546,7 @@ impl SparkDataType for DataType {
                     (3, 1) => String::from("interval second to hour"),
                     (3, 2) => String::from("interval second to minute"),
                     (3, 3) => String::from("interval second"),
-                    (_, _) => unimplemented!("Invalid DayTimeInterval"),
+                    (_, _) => String::from("interval day"),
                 }
             }
             Self::Array {
@@ -713,5 +732,70 @@ mod tests {
             .into();
 
         assert_eq!(expected, schema.json());
+    }
+
+    #[test]
+    fn test_from_str_name() {
+        assert!(matches!(
+            DataType::from_str_name("null"),
+            Ok(DataType::Null)
+        ));
+        assert!(matches!(
+            DataType::from_str_name("void"),
+            Ok(DataType::Null)
+        ));
+        assert!(matches!(
+            DataType::from_str_name("boolean"),
+            Ok(DataType::Boolean)
+        ));
+        assert!(matches!(
+            DataType::from_str_name("byte"),
+            Ok(DataType::Byte)
+        ));
+        assert!(matches!(
+            DataType::from_str_name("short"),
+            Ok(DataType::Short)
+        ));
+        assert!(matches!(
+            DataType::from_str_name("integer"),
+            Ok(DataType::Integer)
+        ));
+        assert!(matches!(
+            DataType::from_str_name("long"),
+            Ok(DataType::Long)
+        ));
+        assert!(matches!(
+            DataType::from_str_name("float"),
+            Ok(DataType::Float)
+        ));
+        assert!(matches!(
+            DataType::from_str_name("double"),
+            Ok(DataType::Double)
+        ));
+        assert!(matches!(
+            DataType::from_str_name("string"),
+            Ok(DataType::String)
+        ));
+        assert!(matches!(
+            DataType::from_str_name("date"),
+            Ok(DataType::Date)
+        ));
+        assert!(matches!(
+            DataType::from_str_name("timestamp"),
+            Ok(DataType::Timestamp)
+        ));
+        assert!(matches!(
+            DataType::from_str_name("timestamp_ntz"),
+            Ok(DataType::TimestampNtz)
+        ));
+        assert!(matches!(
+            DataType::from_str_name("binary"),
+            Ok(DataType::Binary)
+        ));
+        assert!(matches!(
+            DataType::from_str_name("decimal"),
+            Ok(DataType::Decimal { .. })
+        ));
+        assert!(DataType::from_str_name("unsupported_type").is_err());
     }
 }

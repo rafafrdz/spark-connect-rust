@@ -52,7 +52,7 @@ impl From<spark::StorageLevel> for StorageLevel {
             (true, true, false, false, 2) => StorageLevel::MemoryAndDisk2,
             (true, true, true, false, 1) => StorageLevel::OffHeap,
             (true, true, false, true, 1) => StorageLevel::MemoryAndDiskDeser,
-            _ => unimplemented!(),
+            _ => StorageLevel::None,
         }
     }
 }

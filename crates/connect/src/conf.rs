@@ -118,7 +118,14 @@ impl RunTimeConfig {
 
         let resp = self.client.config_request(operation).await?;
 
-        let val = resp.pairs.first().unwrap().value().to_string();
+        let val = resp
+            .pairs
+            .first()
+            .ok_or_else(|| {
+                SparkError::AnalysisException("config key not found in response".to_string())
+            })?
+            .value()
+            .to_string();
 
         Ok(val)
     }
@@ -136,7 +143,13 @@ impl RunTimeConfig {
 
         let resp = self.client.config_request(operation).await?;
 
-        let val = resp.pairs.first().unwrap().value();
+        let val = resp
+            .pairs
+            .first()
+            .ok_or_else(|| {
+                SparkError::AnalysisException("config key not found in response".to_string())
+            })?
+            .value();
 
         match val {
             "true" => Ok(true),
