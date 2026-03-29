@@ -28,6 +28,7 @@ use crate::dataframe::{DataFrame, DataFrameReader};
 use crate::errors::SparkError;
 use crate::plan::LogicalPlanBuilder;
 use crate::streaming::{DataStreamReader, StreamingQueryManager};
+use crate::udf::UdfRegistration;
 
 use crate::spark;
 use spark::spark_connect_service_client::SparkConnectServiceClient;
@@ -305,6 +306,11 @@ impl SparkSession {
     /// Returns a [StreamingQueryManager] that allows managing all the StreamingQuery instances active on this context.
     pub fn streams(&self) -> StreamingQueryManager {
         StreamingQueryManager::new(self)
+    }
+
+    /// Returns a [UdfRegistration] for registering user-defined functions.
+    pub fn udf(&self) -> UdfRegistration {
+        UdfRegistration::new(self.client.clone())
     }
 }
 

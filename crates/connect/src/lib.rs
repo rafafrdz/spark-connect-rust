@@ -147,6 +147,7 @@ pub mod session;
 pub mod storage;
 pub mod streaming;
 pub mod types;
+pub mod udf;
 pub mod window;
 
 pub use dataframe::{DataFrame, DataFrameReader, DataFrameWriter};

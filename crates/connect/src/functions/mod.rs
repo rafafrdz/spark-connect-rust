@@ -46,6 +46,42 @@ where
     })
 }
 
+/// Calls a user-defined function by name.
+///
+/// The UDF must be registered via [`SparkSession::udf`](crate::session::SparkSession::udf).
+pub fn call_udf<I, S>(name: &str, args: I) -> Column
+where
+    I: IntoIterator<Item = S>,
+    S: Into<Column>,
+{
+    Column::from(spark::Expression {
+        expr_type: Some(spark::expression::ExprType::UnresolvedFunction(
+            spark::expression::UnresolvedFunction {
+                function_name: name.to_string(),
+                arguments: VecExpression::from_iter(args).into(),
+                is_distinct: false,
+                is_user_defined_function: true,
+            },
+        )),
+    })
+}
+
+/// Calls a function by name, including both built-in and registered functions.
+pub fn call_function<I, S>(name: &str, args: I) -> Column
+where
+    I: IntoIterator<Item = S>,
+    S: Into<Column>,
+{
+    Column::from(spark::Expression {
+        expr_type: Some(spark::expression::ExprType::CallFunction(
+            spark::CallFunction {
+                function_name: name.to_string(),
+                arguments: VecExpression::from_iter(args).into(),
+            },
+        )),
+    })
+}
+
 macro_rules! gen_func {
     // Case with no args
     ($func_name:ident, [], $doc:expr) => {
@@ -2619,5 +2655,65 @@ mod tests {
         assert_eq!(expected, res);
 
         Ok(())
+    }
+
+    #[test]
+    fn test_call_udf_expression_structure() {
+        let col = call_udf("my_udf", vec![lit(1i32), lit("hello")]);
+        match col.expression.expr_type {
+            Some(spark::expression::ExprType::UnresolvedFunction(ref f)) => {
+                assert_eq!(f.function_name, "my_udf");
+                assert!(f.is_user_defined_function);
+                assert!(!f.is_distinct);
+                assert_eq!(f.arguments.len(), 2);
+            }
+            _ => panic!("Expected UnresolvedFunction expression"),
+        }
+    }
+
+    #[test]
+    fn test_call_udf_no_args() {
+        let col = call_udf::<Vec<Column>, Column>("no_arg_udf", vec![]);
+        match col.expression.expr_type {
+            Some(spark::expression::ExprType::UnresolvedFunction(ref f)) => {
+                assert_eq!(f.function_name, "no_arg_udf");
+                assert!(f.is_user_defined_function);
+                assert!(f.arguments.is_empty());
+            }
+            _ => panic!("Expected UnresolvedFunction expression"),
+        }
+    }
+
+    #[test]
+    fn test_call_function_expression_structure() {
+        let col = call_function("array_sort", vec![lit(1i32)]);
+        match col.expression.expr_type {
+            Some(spark::expression::ExprType::CallFunction(ref f)) => {
+                assert_eq!(f.function_name, "array_sort");
+                assert_eq!(f.arguments.len(), 1);
+            }
+            _ => panic!("Expected CallFunction expression"),
+        }
+    }
+
+    #[test]
+    fn test_call_udf_is_user_defined() {
+        // call_udf must set is_user_defined_function = true
+        let udf_col = call_udf("my_fn", vec![lit(1i32)]);
+        // invoke_func (used by built-in functions) sets it to false
+        let builtin_col = invoke_func("my_fn", vec![lit(1i32)]);
+
+        match udf_col.expression.expr_type {
+            Some(spark::expression::ExprType::UnresolvedFunction(ref f)) => {
+                assert!(f.is_user_defined_function);
+            }
+            _ => panic!("Expected UnresolvedFunction"),
+        }
+        match builtin_col.expression.expr_type {
+            Some(spark::expression::ExprType::UnresolvedFunction(ref f)) => {
+                assert!(!f.is_user_defined_function);
+            }
+            _ => panic!("Expected UnresolvedFunction"),
+        }
     }
 }
