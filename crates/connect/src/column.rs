@@ -212,6 +212,63 @@ impl Column {
         Column::from(update_field)
     }
 
+    /// Extract a value from an array, map, or struct column by key or index.
+    ///
+    /// For array columns, use an integer index. For map columns, use a key value.
+    ///
+    /// # Example:
+    /// ```rust
+    /// // Get the first element of an array column
+    /// col("array_col").get_item(lit(0));
+    ///
+    /// // Get a value from a map column by key
+    /// col("map_col").get_item(lit("key"));
+    /// ```
+    pub fn get_item(self, key: impl Into<Column>) -> Column {
+        let extraction = key.into().expression;
+
+        let extract = spark::expression::UnresolvedExtractValue {
+            child: Some(Box::new(self.expression)),
+            extraction: Some(Box::new(extraction)),
+        };
+
+        Column::from(spark::Expression {
+            expr_type: Some(spark::expression::ExprType::UnresolvedExtractValue(
+                Box::new(extract),
+            )),
+        })
+    }
+
+    /// Extract a field from a struct column by name.
+    ///
+    /// # Example:
+    /// ```rust
+    /// // Get the "name" field from a struct column
+    /// col("struct_col").get_field("name");
+    /// ```
+    pub fn get_field(self, field_name: &str) -> Column {
+        let extraction = spark::Expression {
+            expr_type: Some(spark::expression::ExprType::Literal(
+                spark::expression::Literal {
+                    literal_type: Some(spark::expression::literal::LiteralType::String(
+                        field_name.to_string(),
+                    )),
+                },
+            )),
+        };
+
+        let extract = spark::expression::UnresolvedExtractValue {
+            child: Some(Box::new(self.expression)),
+            extraction: Some(Box::new(extraction)),
+        };
+
+        Column::from(spark::Expression {
+            expr_type: Some(spark::expression::ExprType::UnresolvedExtractValue(
+                Box::new(extract),
+            )),
+        })
+    }
+
     pub fn substr(self, start_pos: impl Into<Column>, length: impl Into<Column>) -> Column {
         invoke_func("substr", vec![self, start_pos.into(), length.into()])
     }
