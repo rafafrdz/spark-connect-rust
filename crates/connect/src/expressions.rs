@@ -257,6 +257,200 @@ where
     }
 }
 
+/// Represents a Spark Decimal literal value.
+///
+/// Used with [`lit`](crate::functions::lit) to create a decimal column literal.
+#[derive(Clone, Debug)]
+pub struct SparkDecimal {
+    pub value: String,
+    pub precision: Option<i32>,
+    pub scale: Option<i32>,
+}
+
+impl SparkDecimal {
+    pub fn new(value: impl Into<String>, precision: Option<i32>, scale: Option<i32>) -> Self {
+        Self {
+            value: value.into(),
+            precision,
+            scale,
+        }
+    }
+}
+
+impl From<SparkDecimal> for spark::expression::Literal {
+    fn from(value: SparkDecimal) -> Self {
+        spark::expression::Literal {
+            literal_type: Some(spark::expression::literal::LiteralType::Decimal(
+                spark::expression::literal::Decimal {
+                    value: value.value,
+                    precision: value.precision,
+                    scale: value.scale,
+                },
+            )),
+        }
+    }
+}
+
+/// Represents a Spark CalendarInterval literal value.
+///
+/// CalendarInterval stores a duration as months, days, and microseconds.
+#[derive(Clone, Debug)]
+pub struct CalendarIntervalLiteral {
+    pub months: i32,
+    pub days: i32,
+    pub microseconds: i64,
+}
+
+impl CalendarIntervalLiteral {
+    pub fn new(months: i32, days: i32, microseconds: i64) -> Self {
+        Self {
+            months,
+            days,
+            microseconds,
+        }
+    }
+}
+
+impl From<CalendarIntervalLiteral> for spark::expression::Literal {
+    fn from(value: CalendarIntervalLiteral) -> Self {
+        spark::expression::Literal {
+            literal_type: Some(spark::expression::literal::LiteralType::CalendarInterval(
+                spark::expression::literal::CalendarInterval {
+                    months: value.months,
+                    days: value.days,
+                    microseconds: value.microseconds,
+                },
+            )),
+        }
+    }
+}
+
+/// Represents a Spark YearMonthInterval literal value.
+///
+/// Stores the interval as a total number of months.
+#[derive(Clone, Debug)]
+pub struct YearMonthIntervalLiteral(pub i32);
+
+impl From<YearMonthIntervalLiteral> for spark::expression::Literal {
+    fn from(value: YearMonthIntervalLiteral) -> Self {
+        spark::expression::Literal {
+            literal_type: Some(spark::expression::literal::LiteralType::YearMonthInterval(
+                value.0,
+            )),
+        }
+    }
+}
+
+/// Represents a Spark DayTimeInterval literal value.
+///
+/// Stores the interval as a total number of microseconds.
+#[derive(Clone, Debug)]
+pub struct DayTimeIntervalLiteral(pub i64);
+
+impl From<DayTimeIntervalLiteral> for spark::expression::Literal {
+    fn from(value: DayTimeIntervalLiteral) -> Self {
+        spark::expression::Literal {
+            literal_type: Some(spark::expression::literal::LiteralType::DayTimeInterval(
+                value.0,
+            )),
+        }
+    }
+}
+
+/// Represents a Spark Map literal value.
+///
+/// Used with [`lit`](crate::functions::lit) to create a map column literal.
+#[derive(Clone, Debug)]
+pub struct MapLiteral<K, V>
+where
+    K: Into<spark::expression::Literal> + Clone,
+    V: Into<spark::expression::Literal> + Clone,
+    spark::DataType: From<K>,
+    spark::DataType: From<V>,
+{
+    pub keys: Vec<K>,
+    pub values: Vec<V>,
+}
+
+impl<K, V> MapLiteral<K, V>
+where
+    K: Into<spark::expression::Literal> + Clone,
+    V: Into<spark::expression::Literal> + Clone,
+    spark::DataType: From<K>,
+    spark::DataType: From<V>,
+{
+    pub fn new(keys: Vec<K>, values: Vec<V>) -> Self {
+        assert_eq!(
+            keys.len(),
+            values.len(),
+            "Keys and values must have the same length"
+        );
+        Self { keys, values }
+    }
+}
+
+impl<K, V> From<MapLiteral<K, V>> for spark::expression::Literal
+where
+    K: Into<spark::expression::Literal> + Clone,
+    V: Into<spark::expression::Literal> + Clone,
+    spark::DataType: From<K>,
+    spark::DataType: From<V>,
+{
+    fn from(value: MapLiteral<K, V>) -> Self {
+        let key_type = Some(spark::DataType::from(
+            value.keys.first().expect("Map cannot be empty").clone(),
+        ));
+        let value_type = Some(spark::DataType::from(
+            value.values.first().expect("Map cannot be empty").clone(),
+        ));
+
+        let keys = value.keys.into_iter().map(|k| k.into()).collect();
+        let values = value.values.into_iter().map(|v| v.into()).collect();
+
+        let map = spark::expression::literal::Map {
+            key_type,
+            value_type,
+            keys,
+            values,
+        };
+
+        spark::expression::Literal {
+            literal_type: Some(spark::expression::literal::LiteralType::Map(map)),
+        }
+    }
+}
+
+/// Represents a Spark Struct literal value.
+///
+/// Used with [`lit`](crate::functions::lit) to create a struct column literal.
+#[derive(Clone, Debug)]
+pub struct StructLiteral {
+    pub struct_type: spark::DataType,
+    pub elements: Vec<spark::expression::Literal>,
+}
+
+impl StructLiteral {
+    pub fn new(struct_type: spark::DataType, elements: Vec<spark::expression::Literal>) -> Self {
+        Self {
+            struct_type,
+            elements,
+        }
+    }
+}
+
+impl From<StructLiteral> for spark::expression::Literal {
+    fn from(value: StructLiteral) -> Self {
+        let struct_lit = spark::expression::literal::Struct {
+            struct_type: Some(value.struct_type),
+            elements: value.elements,
+        };
+
+        spark::expression::Literal {
+            literal_type: Some(spark::expression::literal::LiteralType::Struct(struct_lit)),
+        }
+    }
+}
+
 impl From<&str> for spark::expression::cast::CastToType {
     fn from(value: &str) -> Self {
         spark::expression::cast::CastToType::TypeStr(value.to_string())
@@ -297,5 +491,123 @@ mod tests {
             literal.literal_type,
             Some(spark::expression::literal::LiteralType::Byte(-128))
         );
+    }
+
+    #[test]
+    fn test_decimal_literal() {
+        let decimal = SparkDecimal::new("123.45", Some(10), Some(2));
+        let literal: spark::expression::Literal = decimal.into();
+        match literal.literal_type {
+            Some(spark::expression::literal::LiteralType::Decimal(d)) => {
+                assert_eq!(d.value, "123.45");
+                assert_eq!(d.precision, Some(10));
+                assert_eq!(d.scale, Some(2));
+            }
+            _ => panic!("Expected Decimal literal"),
+        }
+    }
+
+    #[test]
+    fn test_decimal_literal_defaults() {
+        let decimal = SparkDecimal::new("99", None, None);
+        let literal: spark::expression::Literal = decimal.into();
+        match literal.literal_type {
+            Some(spark::expression::literal::LiteralType::Decimal(d)) => {
+                assert_eq!(d.value, "99");
+                assert_eq!(d.precision, None);
+                assert_eq!(d.scale, None);
+            }
+            _ => panic!("Expected Decimal literal"),
+        }
+    }
+
+    #[test]
+    fn test_calendar_interval_literal() {
+        let interval = CalendarIntervalLiteral::new(12, 5, 1_000_000);
+        let literal: spark::expression::Literal = interval.into();
+        match literal.literal_type {
+            Some(spark::expression::literal::LiteralType::CalendarInterval(ci)) => {
+                assert_eq!(ci.months, 12);
+                assert_eq!(ci.days, 5);
+                assert_eq!(ci.microseconds, 1_000_000);
+            }
+            _ => panic!("Expected CalendarInterval literal"),
+        }
+    }
+
+    #[test]
+    fn test_year_month_interval_literal() {
+        let interval = YearMonthIntervalLiteral(18);
+        let literal: spark::expression::Literal = interval.into();
+        assert_eq!(
+            literal.literal_type,
+            Some(spark::expression::literal::LiteralType::YearMonthInterval(
+                18
+            ))
+        );
+    }
+
+    #[test]
+    fn test_day_time_interval_literal() {
+        let interval = DayTimeIntervalLiteral(86_400_000_000);
+        let literal: spark::expression::Literal = interval.into();
+        assert_eq!(
+            literal.literal_type,
+            Some(spark::expression::literal::LiteralType::DayTimeInterval(
+                86_400_000_000
+            ))
+        );
+    }
+
+    #[test]
+    fn test_map_literal() {
+        let map = MapLiteral::new(
+            vec!["key1".to_string(), "key2".to_string()],
+            vec![1i32, 2i32],
+        );
+        let literal: spark::expression::Literal = map.into();
+        match literal.literal_type {
+            Some(spark::expression::literal::LiteralType::Map(m)) => {
+                assert_eq!(m.keys.len(), 2);
+                assert_eq!(m.values.len(), 2);
+                assert!(m.key_type.is_some());
+                assert!(m.value_type.is_some());
+            }
+            _ => panic!("Expected Map literal"),
+        }
+    }
+
+    #[test]
+    fn test_struct_literal() {
+        let struct_type =
+            crate::types::DataType::Struct(Box::new(crate::types::StructType::new(vec![
+                crate::types::StructField {
+                    name: "name",
+                    data_type: crate::types::DataType::String,
+                    nullable: true,
+                    metadata: None,
+                },
+                crate::types::StructField {
+                    name: "age",
+                    data_type: crate::types::DataType::Integer,
+                    nullable: true,
+                    metadata: None,
+                },
+            ])));
+
+        let elements = vec![
+            spark::expression::Literal::from("Alice".to_string()),
+            spark::expression::Literal::from(30i32),
+        ];
+
+        let struct_lit = StructLiteral::new(struct_type.into(), elements);
+        let literal: spark::expression::Literal = struct_lit.into();
+        match literal.literal_type {
+            Some(spark::expression::literal::LiteralType::Struct(s)) => {
+                assert_eq!(s.elements.len(), 2);
+                assert!(s.struct_type.is_some());
+            }
+            _ => panic!("Expected Struct literal"),
+        }
     }
 }
