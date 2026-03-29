@@ -131,26 +131,74 @@ impl From<std::string::FromUtf8Error> for SparkError {
 
 impl From<tonic::Status> for SparkError {
     fn from(status: tonic::Status) -> Self {
-        match status.code() {
-            Code::Ok => SparkError::AnalysisException(status.message().to_string()),
-            Code::Unknown => SparkError::Unknown(status.message().to_string()),
-            Code::Aborted => SparkError::Aborted(status.message().to_string()),
-            Code::NotFound => SparkError::NotFound(status.message().to_string()),
-            Code::Internal => SparkError::AnalysisException(status.message().to_string()),
-            Code::DataLoss => SparkError::DataLoss(status.message().to_string()),
-            Code::Cancelled => SparkError::Cancelled(status.message().to_string()),
-            Code::OutOfRange => SparkError::OutOfRange(status.message().to_string()),
-            Code::Unavailable => SparkError::Unavailable(status.message().to_string()),
-            Code::AlreadyExists => SparkError::AnalysisException(status.message().to_string()),
-            Code::InvalidArgument => SparkError::InvalidArgument(status.message().to_string()),
-            Code::DeadlineExceeded => SparkError::DeadlineExceeded(status.message().to_string()),
-            Code::Unimplemented => SparkError::Unimplemented(status.message().to_string()),
-            Code::Unauthenticated => SparkError::Unauthenticated(status.message().to_string()),
-            Code::PermissionDenied => SparkError::PermissionDenied(status.message().to_string()),
-            Code::ResourceExhausted => SparkError::ResourceExhausted(status.message().to_string()),
-            Code::FailedPrecondition => {
-                SparkError::FailedPrecondition(status.message().to_string())
+        // Include the gRPC status code in the error message for better debugging
+        let details = if status.metadata().is_empty() {
+            status.message().to_string()
+        } else {
+            // Try to extract any additional error details from metadata
+            let mut msg = status.message().to_string();
+
+            // Spark Connect may include error details as binary metadata
+            for kv in status.metadata().iter() {
+                match kv {
+                    tonic::metadata::KeyAndValueRef::Ascii(key, value) => {
+                        if let Ok(v) = value.to_str() {
+                            msg.push_str(&format!("\n[{}]: {}", key.as_str(), v));
+                        }
+                    }
+                    tonic::metadata::KeyAndValueRef::Binary(key, value) => {
+                        if let Ok(v) = std::str::from_utf8(value.as_ref()) {
+                            msg.push_str(&format!("\n[{}]: {}", key.as_str(), v));
+                        }
+                    }
+                }
             }
+
+            msg
+        };
+
+        // If the tonic Status carries a source error, append it for context
+        if let Some(src) = status.source() {
+            let details = format!("{}\ncaused by: {}", details, src);
+            return match status.code() {
+                Code::Ok => SparkError::AnalysisException(details),
+                Code::Unknown => SparkError::Unknown(details),
+                Code::Aborted => SparkError::Aborted(details),
+                Code::NotFound => SparkError::NotFound(details),
+                Code::Internal => SparkError::AnalysisException(details),
+                Code::DataLoss => SparkError::DataLoss(details),
+                Code::Cancelled => SparkError::Cancelled(details),
+                Code::OutOfRange => SparkError::OutOfRange(details),
+                Code::Unavailable => SparkError::Unavailable(details),
+                Code::AlreadyExists => SparkError::AnalysisException(details),
+                Code::InvalidArgument => SparkError::InvalidArgument(details),
+                Code::DeadlineExceeded => SparkError::DeadlineExceeded(details),
+                Code::Unimplemented => SparkError::Unimplemented(details),
+                Code::Unauthenticated => SparkError::Unauthenticated(details),
+                Code::PermissionDenied => SparkError::PermissionDenied(details),
+                Code::ResourceExhausted => SparkError::ResourceExhausted(details),
+                Code::FailedPrecondition => SparkError::FailedPrecondition(details),
+            };
+        }
+
+        match status.code() {
+            Code::Ok => SparkError::AnalysisException(details),
+            Code::Unknown => SparkError::Unknown(details),
+            Code::Aborted => SparkError::Aborted(details),
+            Code::NotFound => SparkError::NotFound(details),
+            Code::Internal => SparkError::AnalysisException(details),
+            Code::DataLoss => SparkError::DataLoss(details),
+            Code::Cancelled => SparkError::Cancelled(details),
+            Code::OutOfRange => SparkError::OutOfRange(details),
+            Code::Unavailable => SparkError::Unavailable(details),
+            Code::AlreadyExists => SparkError::AnalysisException(details),
+            Code::InvalidArgument => SparkError::InvalidArgument(details),
+            Code::DeadlineExceeded => SparkError::DeadlineExceeded(details),
+            Code::Unimplemented => SparkError::Unimplemented(details),
+            Code::Unauthenticated => SparkError::Unauthenticated(details),
+            Code::PermissionDenied => SparkError::PermissionDenied(details),
+            Code::ResourceExhausted => SparkError::ResourceExhausted(details),
+            Code::FailedPrecondition => SparkError::FailedPrecondition(details),
         }
     }
 }
