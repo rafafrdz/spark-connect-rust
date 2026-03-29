@@ -19,6 +19,7 @@
 
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::time::Duration;
 
 use crate::client::{ChannelBuilder, Config, HeadersLayer, SparkClient, SparkConnectClient};
 
@@ -100,10 +101,30 @@ impl SparkSessionBuilder {
         self
     }
 
+    /// Sets the timeout for establishing the initial gRPC connection.
+    pub fn connect_timeout(mut self, timeout: Duration) -> Self {
+        self.channel_builder.connect_timeout = Some(timeout);
+        self
+    }
+
+    /// Sets the timeout for individual gRPC requests.
+    pub fn request_timeout(mut self, timeout: Duration) -> Self {
+        self.channel_builder.request_timeout = Some(timeout);
+        self
+    }
+
     async fn create_client(&self) -> Result<SparkSession, SparkError> {
-        let channel = Channel::from_shared(self.channel_builder.endpoint())?
-            .connect()
-            .await?;
+        let mut endpoint = Channel::from_shared(self.channel_builder.endpoint())?;
+
+        if let Some(timeout) = self.channel_builder.connect_timeout {
+            endpoint = endpoint.connect_timeout(timeout);
+        }
+
+        if let Some(timeout) = self.channel_builder.request_timeout {
+            endpoint = endpoint.timeout(timeout);
+        }
+
+        let channel = endpoint.connect().await?;
 
         let channel = ServiceBuilder::new()
             .layer(HeadersLayer::new(
