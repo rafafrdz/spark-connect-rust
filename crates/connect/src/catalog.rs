@@ -78,6 +78,13 @@ impl Catalog {
         self.spark_session.client().execute_command(plan).await
     }
 
+    /// Returns a list of all catalogs in this session.
+    ///
+    /// Convenience method equivalent to `list_catalogs(None)`.
+    pub async fn list_all_catalogs(self) -> Result<RecordBatch, SparkError> {
+        self.list_catalogs(None).await
+    }
+
     /// Returns a list of catalogs in this session
     pub async fn list_catalogs(self, pattern: Option<&str>) -> Result<RecordBatch, SparkError> {
         let pattern = pattern.map(|val| val.to_owned());
@@ -119,6 +126,13 @@ impl Catalog {
         let plan = LogicalPlanBuilder::from(rel_type).plan_root();
 
         self.spark_session.client().execute_command(plan).await
+    }
+
+    /// Returns a list of all databases in this session.
+    ///
+    /// Convenience method equivalent to `list_databases(None)`.
+    pub async fn list_all_databases(self) -> Result<RecordBatch, SparkError> {
+        self.list_databases(None).await
     }
 
     /// Returns a list of databases in this session
@@ -166,6 +180,13 @@ impl Catalog {
         Catalog::arrow_to_bool(record)
     }
 
+    /// Returns a list of all tables/views in the current database.
+    ///
+    /// Convenience method equivalent to `list_tables(None, None)`.
+    pub async fn list_all_tables(self) -> Result<RecordBatch, SparkError> {
+        self.list_tables(None, None).await
+    }
+
     /// Returns a list of tables/views in the specific database
     pub async fn list_tables(
         self,
@@ -196,6 +217,13 @@ impl Catalog {
         let plan = LogicalPlanBuilder::from(rel_type).plan_root();
 
         self.spark_session.client().to_arrow(plan).await
+    }
+
+    /// Returns a list of all functions registered in the current database.
+    ///
+    /// Convenience method equivalent to `list_functions(None, None)`.
+    pub async fn list_all_functions(self) -> Result<RecordBatch, SparkError> {
+        self.list_functions(None, None).await
     }
 
     /// Returns a list of functions registered in the specified database.
