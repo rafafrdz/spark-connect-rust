@@ -20,6 +20,7 @@
 use std::collections::HashMap;
 use std::env;
 use std::str::FromStr;
+use std::time::Duration;
 
 use crate::errors::SparkError;
 
@@ -43,6 +44,8 @@ pub struct ChannelBuilder {
     pub(super) user_agent: Option<String>,
     pub(super) use_ssl: bool,
     pub(super) headers: Option<HashMap<String, String>>,
+    pub connect_timeout: Option<Duration>,
+    pub request_timeout: Option<Duration>,
 }
 
 impl Default for ChannelBuilder {
@@ -172,6 +175,8 @@ impl ChannelBuilder {
             user_agent: ChannelBuilder::create_user_agent(None),
             use_ssl: false,
             headers: None,
+            connect_timeout: None,
+            request_timeout: None,
         };
 
         if let Some(mut headers) = headers {

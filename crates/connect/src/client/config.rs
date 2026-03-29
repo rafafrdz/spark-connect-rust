@@ -115,6 +115,8 @@ impl From<Config> for ChannelBuilder {
             } else {
                 Some(headers)
             },
+            connect_timeout: None,
+            request_timeout: None,
         }
     }
 }
