@@ -29,6 +29,7 @@ use crate::dataframe::{DataFrame, DataFrameReader};
 use crate::errors::SparkError;
 use crate::plan::LogicalPlanBuilder;
 use crate::streaming::{DataStreamReader, StreamingQueryManager};
+use crate::udf::UdfRegistration;
 
 use crate::spark;
 use spark::spark_connect_service_client::SparkConnectServiceClient;
@@ -513,6 +514,11 @@ impl SparkSession {
         // Best-effort interrupt of all running operations
         let _ = self.interrupt_all().await;
         Ok(())
+    }
+
+    /// Returns a [UdfRegistration] for registering user-defined functions.
+    pub fn udf(&self) -> UdfRegistration {
+        UdfRegistration::new(self.client.clone())
     }
 }
 
