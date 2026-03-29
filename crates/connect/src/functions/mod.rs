@@ -157,7 +157,7 @@ gen_func!(spark_partition_id, [], "A column for partition ID.");
 #[allow(unused_variables)]
 /// Evaluates a list of conditions and returns one of multiple possible result expressions.
 fn when(condition: impl Into<Column>, value: Column) -> Column {
-    unimplemented!("not implemented")
+    todo!("when() is not yet implemented")
 }
 
 /// Computes bitwise not.
@@ -745,7 +745,7 @@ gen_func!(array_size, [col: Column], "Returns the total number of elements in th
 
 #[allow(unused_variables)]
 pub fn array_sort(col: impl Into<Column>, compactor: Option<impl Into<Column>>) -> Column {
-    unimplemented!()
+    todo!("array_sort() is not yet implemented")
 }
 
 /// adds an item into a given array at a specified array index.
