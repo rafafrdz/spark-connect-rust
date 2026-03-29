@@ -63,7 +63,8 @@ impl Default for SparkSessionBuilder {
 
 impl SparkSessionBuilder {
     fn new(connection: &str) -> Self {
-        let channel_builder = ChannelBuilder::create(connection).unwrap();
+        let channel_builder = ChannelBuilder::create(connection)
+            .expect("Failed to parse the Spark Connect connection string");
 
         Self {
             channel_builder,
@@ -207,9 +208,17 @@ impl SparkSession {
             .execute_command_and_fetch(plan)
             .await?;
 
-        let relation = resp.sql_command_result.to_owned().unwrap().relation;
+        let relation = resp
+            .sql_command_result
+            .to_owned()
+            .ok_or(SparkError::AnalysisException(
+                "SQL command result is empty".to_string(),
+            ))?
+            .relation;
 
-        let logical_plan = LogicalPlanBuilder::new(relation.unwrap());
+        let logical_plan = LogicalPlanBuilder::new(relation.ok_or(
+            SparkError::AnalysisException("SQL relation result is empty".to_string()),
+        )?);
 
         Ok(DataFrame::new(self.session(), logical_plan))
     }
