@@ -52,7 +52,10 @@ impl Default for ChannelBuilder {
             Err(_) => "sc://localhost:15002".to_string(),
         };
 
-        ChannelBuilder::create(&connection).unwrap()
+        ChannelBuilder::create(&connection).unwrap_or_else(|_| {
+            ChannelBuilder::create("sc://localhost:15002")
+                .expect("default connection must be valid")
+        })
     }
 }
 

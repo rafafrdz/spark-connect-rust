@@ -204,7 +204,9 @@ where
         let req = spark::ReattachExecuteRequest {
             session_id: self.session_id(),
             user_context: self.user_context.clone(),
-            operation_id: self.operation_id.clone().unwrap(),
+            operation_id: self.operation_id.clone().ok_or_else(|| {
+                SparkError::AnalysisException("operation_id is not set".to_string())
+            })?,
             client_type: self.builder.user_agent.clone(),
             last_response_id: self.response_id.clone(),
         };
@@ -249,7 +251,9 @@ where
 
     async fn release_until(&mut self) -> Result<(), SparkError> {
         let release_until = spark::release_execute_request::ReleaseUntil {
-            response_id: self.response_id.clone().unwrap(),
+            response_id: self.response_id.clone().ok_or_else(|| {
+                SparkError::AnalysisException("response_id is not set".to_string())
+            })?,
         };
 
         self.release_execute(Some(spark::release_execute_request::Release::ReleaseUntil(
@@ -276,7 +280,9 @@ where
         let req = spark::ReleaseExecuteRequest {
             session_id: self.session_id(),
             user_context: self.user_context.clone(),
-            operation_id: self.operation_id.clone().unwrap(),
+            operation_id: self.operation_id.clone().ok_or_else(|| {
+                SparkError::AnalysisException("operation_id is not set".to_string())
+            })?,
             client_type: self.builder.user_agent.clone(),
             release,
         };
@@ -435,7 +441,9 @@ where
                 }
                 ResponseType::ResultComplete(_) => self.handler.result_complete = true,
                 ResponseType::Extension(_) => {
-                    unimplemented!("extension response types are not implemented")
+                    return Err(SparkError::NotYetImplemented(
+                        "extension response types are not implemented".to_string(),
+                    ))
                 }
             }
         }
@@ -560,8 +568,16 @@ where
         let col = rows.column(0);
 
         let data: &arrow::array::StringArray = match col.data_type() {
-            arrow::datatypes::DataType::Utf8 => col.as_any().downcast_ref().unwrap(),
-            _ => unimplemented!("only Utf8 data types are currently handled currently."),
+            arrow::datatypes::DataType::Utf8 => col.as_any().downcast_ref().ok_or_else(|| {
+                SparkError::AnalysisException(
+                    "failed to downcast column to StringArray".to_string(),
+                )
+            })?,
+            _ => {
+                return Err(SparkError::NotYetImplemented(
+                    "only Utf8 data types are currently handled".to_string(),
+                ))
+            }
         };
 
         Ok(data.value(0).to_string())

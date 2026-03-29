@@ -96,10 +96,20 @@ where
 
         Box::pin(async move {
             for (key, value) in &headers {
-                let meta_key = HeaderName::from_str(key.as_str()).unwrap();
-                let meta_val = HeaderValue::from_str(value.as_str()).unwrap();
-
-                request.headers_mut().insert(meta_key, meta_val);
+                match (
+                    HeaderName::from_str(key.as_str()),
+                    HeaderValue::from_str(value.as_str()),
+                ) {
+                    (Ok(meta_key), Ok(meta_val)) => {
+                        request.headers_mut().insert(meta_key, meta_val);
+                    }
+                    (Err(e), _) => {
+                        eprintln!("skipping header with invalid name '{}': {}", key, e);
+                    }
+                    (_, Err(e)) => {
+                        eprintln!("skipping header with invalid value '{}': {}", key, e);
+                    }
+                }
             }
 
             inner.call(request).await
