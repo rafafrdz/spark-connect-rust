@@ -46,42 +46,6 @@ where
     })
 }
 
-/// Calls a user-defined function by name.
-///
-/// The UDF must be registered via [`SparkSession::udf`](crate::session::SparkSession::udf).
-pub fn call_udf<I, S>(name: &str, args: I) -> Column
-where
-    I: IntoIterator<Item = S>,
-    S: Into<Column>,
-{
-    Column::from(spark::Expression {
-        expr_type: Some(spark::expression::ExprType::UnresolvedFunction(
-            spark::expression::UnresolvedFunction {
-                function_name: name.to_string(),
-                arguments: VecExpression::from_iter(args).into(),
-                is_distinct: false,
-                is_user_defined_function: true,
-            },
-        )),
-    })
-}
-
-/// Calls a function by name, including both built-in and registered functions.
-pub fn call_function<I, S>(name: &str, args: I) -> Column
-where
-    I: IntoIterator<Item = S>,
-    S: Into<Column>,
-{
-    Column::from(spark::Expression {
-        expr_type: Some(spark::expression::ExprType::CallFunction(
-            spark::CallFunction {
-                function_name: name.to_string(),
-                arguments: VecExpression::from_iter(args).into(),
-            },
-        )),
-    })
-}
-
 macro_rules! gen_func {
     // Case with no args
     ($func_name:ident, [], $doc:expr) => {
@@ -127,11 +91,27 @@ where
     create_map(map)
 }
 
-/// Creates a lambda expression for use with higher-order functions.
+/// Creates a lambda variable reference for use in higher-order function bodies.
 ///
-/// # Arguments
-/// * `func` - The lambda body expression (use `col("x")` for lambda variable references)
-/// * `var_names` - Names of the lambda variables
+/// Use this instead of `col()` when referencing lambda parameters inside
+/// `transform`, `filter`, `aggregate`, etc.
+///
+/// # Example
+/// ```rust
+/// // Transform array: [1,2,3] -> [2,3,4]
+/// transform(col("array"), lvar("x") + lit(1), "x")
+/// ```
+pub fn lvar(name: &str) -> Column {
+    Column::from(spark::Expression {
+        expr_type: Some(spark::expression::ExprType::UnresolvedNamedLambdaVariable(
+            spark::expression::UnresolvedNamedLambdaVariable {
+                name_parts: vec![name.to_string()],
+            },
+        )),
+    })
+}
+
+/// Creates a lambda expression for use with higher-order functions.
 fn create_lambda(func: Column, var_names: &[&str]) -> spark::Expression {
     let arguments = var_names
         .iter()
@@ -155,7 +135,7 @@ fn create_lambda(func: Column, var_names: &[&str]) -> spark::Expression {
 /// # Example
 /// ```rust
 /// // Transform array elements: [1,2,3] -> [2,3,4]
-/// transform(col("array"), col("x") + lit(1), "x")
+/// transform(col("array"), lvar("x") + lit(1), "x")
 /// ```
 pub fn transform(col: impl Into<Column>, func: Column, var_name: &str) -> Column {
     let lambda = create_lambda(func, &[var_name]);
@@ -167,7 +147,7 @@ pub fn transform(col: impl Into<Column>, func: Column, var_name: &str) -> Column
 /// # Example
 /// ```rust
 /// // Keep only positive values
-/// filter(col("array"), col("x").eq(lit(1)), "x")
+/// filter(col("array"), lvar("x").eq(lit(1)), "x")
 /// ```
 pub fn filter(col: impl Into<Column>, func: Column, var_name: &str) -> Column {
     let lambda = create_lambda(func, &[var_name]);
@@ -178,7 +158,7 @@ pub fn filter(col: impl Into<Column>, func: Column, var_name: &str) -> Column {
 ///
 /// # Example
 /// ```rust
-/// exists(col("array"), col("x").eq(lit(1)), "x")
+/// exists(col("array"), lvar("x").eq(lit(1)), "x")
 /// ```
 pub fn exists(col: impl Into<Column>, func: Column, var_name: &str) -> Column {
     let lambda = create_lambda(func, &[var_name]);
@@ -189,7 +169,7 @@ pub fn exists(col: impl Into<Column>, func: Column, var_name: &str) -> Column {
 ///
 /// # Example
 /// ```rust
-/// forall(col("array"), col("x").eq(lit(1)), "x")
+/// forall(col("array"), lvar("x").eq(lit(1)), "x")
 /// ```
 pub fn forall(col: impl Into<Column>, func: Column, var_name: &str) -> Column {
     let lambda = create_lambda(func, &[var_name]);
@@ -202,7 +182,7 @@ pub fn forall(col: impl Into<Column>, func: Column, var_name: &str) -> Column {
 /// # Example
 /// ```rust
 /// // Sum all elements: aggregate([1,2,3], 0, (acc, x) -> acc + x)
-/// aggregate(col("array"), lit(0), col("acc") + col("x"), "acc", "x")
+/// aggregate(col("array"), lit(0), lvar("acc") + lvar("x"), "acc", "x")
 /// ```
 pub fn aggregate(
     col: impl Into<Column>,
@@ -223,7 +203,7 @@ pub fn aggregate(
 /// # Example
 /// ```rust
 /// // Sort descending: array_sort([3,1,2], (a, b) -> b - a)
-/// array_sort_with_comp(col("array"), col("b") - col("a"), "a", "b")
+/// array_sort_with_comp(col("array"), lvar("b") - lvar("a"), "a", "b")
 /// ```
 pub fn array_sort_with_comp(
     col: impl Into<Column>,
@@ -239,7 +219,7 @@ pub fn array_sort_with_comp(
 ///
 /// # Example
 /// ```rust
-/// map_filter(col("map"), col("v").eq(lit(1)), "k", "v")
+/// map_filter(col("map"), lvar("v").eq(lit(1)), "k", "v")
 /// ```
 pub fn map_filter(
     col: impl Into<Column>,
@@ -255,7 +235,7 @@ pub fn map_filter(
 ///
 /// # Example
 /// ```rust
-/// transform_keys(col("map"), col("k") + lit(1), "k", "v")
+/// transform_keys(col("map"), lvar("k") + lit(1), "k", "v")
 /// ```
 pub fn transform_keys(
     col: impl Into<Column>,
@@ -271,7 +251,7 @@ pub fn transform_keys(
 ///
 /// # Example
 /// ```rust
-/// transform_values(col("map"), col("v") * lit(2), "k", "v")
+/// transform_values(col("map"), lvar("v") * lit(2), "k", "v")
 /// ```
 pub fn transform_values(
     col: impl Into<Column>,
@@ -287,7 +267,7 @@ pub fn transform_values(
 ///
 /// # Example
 /// ```rust
-/// zip_with(col("arr1"), col("arr2"), col("x") + col("y"), "x", "y")
+/// zip_with(col("arr1"), col("arr2"), lvar("x") + lvar("y"), "x", "y")
 /// ```
 pub fn zip_with(
     left: impl Into<Column>,
@@ -318,16 +298,6 @@ pub fn column(value: impl Into<Column>) -> Column {
 /// Creates a [Column] of [spark::expression::Literal] value.
 pub fn lit(col: impl Into<Literal>) -> Column {
     Column::from(col.into())
-}
-
-/// Creates a [Column] of null [spark::expression::Literal] value.
-pub fn lit_null() -> Column {
-    let literal = spark::expression::Literal {
-        literal_type: Some(spark::expression::literal::LiteralType::Null(
-            crate::types::DataType::Null.to_proto_type(),
-        )),
-    };
-    Column::from(literal)
 }
 
 /// Marks a DataFrame as small enough for use in broadcast joins.
@@ -369,7 +339,7 @@ gen_func!(spark_partition_id, [], "A column for partition ID.");
 #[allow(unused_variables)]
 /// Evaluates a list of conditions and returns one of multiple possible result expressions.
 fn when(condition: impl Into<Column>, value: Column) -> Column {
-    todo!("when() is not yet implemented")
+    unimplemented!("not implemented")
 }
 
 /// Computes bitwise not.
@@ -954,11 +924,6 @@ gen_func!(array_position, [col: Column, value: Column], "Locates the position of
 gen_func!(element_at, [col: Column, extraction: Column], "Returns element of array at given index in extraction if col is array.");
 gen_func!(array_append, [col: Column, value: Column], "Returns an array of the elements in col1 along with the added element in col2 at the last of the array.");
 gen_func!(array_size, [col: Column], "Returns the total number of elements in the array.");
-
-#[allow(unused_variables)]
-pub fn array_sort(col: impl Into<Column>, compactor: Option<impl Into<Column>>) -> Column {
-    todo!("array_sort() is not yet implemented")
-}
 
 /// adds an item into a given array at a specified array index.
 pub fn array_insert(
@@ -1942,20 +1907,6 @@ mod tests {
         };
     }
 
-    #[test]
-    fn test_lit_null() {
-        let col = lit_null();
-        match col.expression.expr_type {
-            Some(spark::expression::ExprType::Literal(ref lit)) => {
-                assert!(matches!(
-                    lit.literal_type,
-                    Some(spark::expression::literal::LiteralType::Null(_))
-                ));
-            }
-            _ => panic!("Expected literal expression"),
-        }
-    }
-
     // normal functions
     test_func!(
         test_func_cast,
@@ -2858,22 +2809,8 @@ mod tests {
     }
 
     #[test]
-    fn test_call_udf_expression_structure() {
-        let col = call_udf("my_udf", vec![lit(1i32), lit("hello")]);
-        match col.expression.expr_type {
-            Some(spark::expression::ExprType::UnresolvedFunction(ref f)) => {
-                assert_eq!(f.function_name, "my_udf");
-                assert!(f.is_user_defined_function);
-                assert!(!f.is_distinct);
-                assert_eq!(f.arguments.len(), 2);
-            }
-            _ => panic!("Expected UnresolvedFunction expression"),
-        }
-    }
-
-    #[test]
     fn test_transform_lambda_structure() {
-        let result = transform(col("arr"), col("x") + lit(1), "x");
+        let result = transform(col("arr"), lvar("x") + lit(1), "x");
         match result.expression.expr_type {
             Some(spark::expression::ExprType::UnresolvedFunction(ref f)) => {
                 assert_eq!(f.function_name, "transform");
@@ -2894,7 +2831,7 @@ mod tests {
 
     #[test]
     fn test_filter_lambda_structure() {
-        let result = filter(col("arr"), col("x").eq(lit(0)), "x");
+        let result = filter(col("arr"), lvar("x").eq(lit(0)), "x");
         match result.expression.expr_type {
             Some(spark::expression::ExprType::UnresolvedFunction(ref f)) => {
                 assert_eq!(f.function_name, "filter");
@@ -2905,21 +2842,8 @@ mod tests {
     }
 
     #[test]
-    fn test_call_udf_no_args() {
-        let col = call_udf::<Vec<Column>, Column>("no_arg_udf", vec![]);
-        match col.expression.expr_type {
-            Some(spark::expression::ExprType::UnresolvedFunction(ref f)) => {
-                assert_eq!(f.function_name, "no_arg_udf");
-                assert!(f.is_user_defined_function);
-                assert!(f.arguments.is_empty());
-            }
-            _ => panic!("Expected UnresolvedFunction expression"),
-        }
-    }
-
-    #[test]
     fn test_aggregate_lambda_structure() {
-        let result = aggregate(col("arr"), lit(0), col("acc") + col("x"), "acc", "x");
+        let result = aggregate(col("arr"), lit(0), lvar("acc") + lvar("x"), "acc", "x");
         match result.expression.expr_type {
             Some(spark::expression::ExprType::UnresolvedFunction(ref f)) => {
                 assert_eq!(f.function_name, "aggregate");
@@ -2939,20 +2863,8 @@ mod tests {
     }
 
     #[test]
-    fn test_call_function_expression_structure() {
-        let col = call_function("array_sort", vec![lit(1i32)]);
-        match col.expression.expr_type {
-            Some(spark::expression::ExprType::CallFunction(ref f)) => {
-                assert_eq!(f.function_name, "array_sort");
-                assert_eq!(f.arguments.len(), 1);
-            }
-            _ => panic!("Expected CallFunction expression"),
-        }
-    }
-
-    #[test]
     fn test_exists_lambda_structure() {
-        let result = exists(col("arr"), col("x").eq(lit(0)), "x");
+        let result = exists(col("arr"), lvar("x").eq(lit(0)), "x");
         match result.expression.expr_type {
             Some(spark::expression::ExprType::UnresolvedFunction(ref f)) => {
                 assert_eq!(f.function_name, "exists");
@@ -2964,7 +2876,7 @@ mod tests {
 
     #[test]
     fn test_forall_lambda_structure() {
-        let result = forall(col("arr"), col("x").eq(lit(0)), "x");
+        let result = forall(col("arr"), lvar("x").eq(lit(0)), "x");
         match result.expression.expr_type {
             Some(spark::expression::ExprType::UnresolvedFunction(ref f)) => {
                 assert_eq!(f.function_name, "forall");
@@ -2975,7 +2887,7 @@ mod tests {
 
     #[test]
     fn test_array_sort_with_comp_structure() {
-        let result = array_sort_with_comp(col("arr"), col("a") - col("b"), "a", "b");
+        let result = array_sort_with_comp(col("arr"), lvar("a") - lvar("b"), "a", "b");
         match result.expression.expr_type {
             Some(spark::expression::ExprType::UnresolvedFunction(ref f)) => {
                 assert_eq!(f.function_name, "array_sort");
@@ -2994,29 +2906,8 @@ mod tests {
     }
 
     #[test]
-    fn test_call_udf_is_user_defined() {
-        // call_udf must set is_user_defined_function = true
-        let udf_col = call_udf("my_fn", vec![lit(1i32)]);
-        // invoke_func (used by built-in functions) sets it to false
-        let builtin_col = invoke_func("my_fn", vec![lit(1i32)]);
-
-        match udf_col.expression.expr_type {
-            Some(spark::expression::ExprType::UnresolvedFunction(ref f)) => {
-                assert!(f.is_user_defined_function);
-            }
-            _ => panic!("Expected UnresolvedFunction"),
-        }
-        match builtin_col.expression.expr_type {
-            Some(spark::expression::ExprType::UnresolvedFunction(ref f)) => {
-                assert!(!f.is_user_defined_function);
-            }
-            _ => panic!("Expected UnresolvedFunction"),
-        }
-    }
-
-    #[test]
     fn test_map_filter_structure() {
-        let result = map_filter(col("map"), col("v").eq(lit(0)), "k", "v");
+        let result = map_filter(col("map"), lvar("v").eq(lit(0)), "k", "v");
         match result.expression.expr_type {
             Some(spark::expression::ExprType::UnresolvedFunction(ref f)) => {
                 assert_eq!(f.function_name, "map_filter");
@@ -3028,7 +2919,7 @@ mod tests {
 
     #[test]
     fn test_transform_keys_structure() {
-        let result = transform_keys(col("map"), col("k") + lit(1), "k", "v");
+        let result = transform_keys(col("map"), lvar("k") + lit(1), "k", "v");
         match result.expression.expr_type {
             Some(spark::expression::ExprType::UnresolvedFunction(ref f)) => {
                 assert_eq!(f.function_name, "transform_keys");
@@ -3039,7 +2930,7 @@ mod tests {
 
     #[test]
     fn test_zip_with_structure() {
-        let result = zip_with(col("a"), col("b"), col("x") + col("y"), "x", "y");
+        let result = zip_with(col("a"), col("b"), lvar("x") + lvar("y"), "x", "y");
         match result.expression.expr_type {
             Some(spark::expression::ExprType::UnresolvedFunction(ref f)) => {
                 assert_eq!(f.function_name, "zip_with");
