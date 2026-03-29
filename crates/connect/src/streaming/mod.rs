@@ -299,7 +299,14 @@ impl DataStreamWriter {
             format: self.format.unwrap_or("".to_string()),
             options: self.write_options,
             partitioning_column_names: self.partition_by,
-            output_mode: self.output_mode.unwrap().as_str_name().to_string(),
+            output_mode: self
+                .output_mode
+                .as_ref()
+                .ok_or(SparkError::AnalysisException(
+                    "output_mode is not set".to_string(),
+                ))?
+                .as_str_name()
+                .to_string(),
             query_name: self.query_name.unwrap_or("".to_string()),
             foreach_batch: None,
             foreach_writer: None,
@@ -318,10 +325,11 @@ impl DataStreamWriter {
             .await?
             .write_stream_operation_start_result;
 
-        Ok(StreamingQuery::new(
-            self.dataframe.spark_session,
-            operation_start_resp.unwrap(),
-        ))
+        let operation_start_resp = operation_start_resp.ok_or(SparkError::AnalysisException(
+            "write stream operation start result is empty".to_string(),
+        ))?;
+
+        StreamingQuery::new(self.dataframe.spark_session, operation_start_resp)
     }
 
     /// Start a streaming job to save the contents of the [StreamingQuery] to a data source.
@@ -384,14 +392,16 @@ impl StreamingQuery {
     pub fn new(
         spark_session: Box<SparkSession>,
         write_stream: spark::WriteStreamOperationStartResult,
-    ) -> Self {
-        let query_instance = write_stream.query_id.unwrap();
+    ) -> Result<Self, SparkError> {
+        let query_instance = write_stream.query_id.ok_or(SparkError::AnalysisException(
+            "streaming query id is empty".to_string(),
+        ))?;
 
-        Self {
+        Ok(Self {
             spark_session,
             query_instance,
             name: Some(write_stream.name),
-        }
+        })
     }
 
     fn streaming_query_cmd() -> spark::StreamingQueryCommand {
@@ -656,7 +666,9 @@ impl StreamingQuery {
 }
 
 fn to_json_object(val: Vec<String>) -> Result<serde_json::Value, SparkError> {
-    let val = &val.first().unwrap();
+    let val = val.first().ok_or(SparkError::AnalysisException(
+        "empty progress response".to_string(),
+    ))?;
     Ok(serde_json::from_str::<serde_json::Value>(val)?)
 }
 
@@ -727,7 +739,9 @@ impl StreamingQueryManager {
         for stream in active_result.active_queries {
             let query = StreamingQuery {
                 spark_session: self.spark_session.clone(),
-                query_instance: stream.id.clone().unwrap(),
+                query_instance: stream.id.clone().ok_or(SparkError::AnalysisException(
+                    "streaming query instance id is empty".to_string(),
+                ))?,
                 name: stream.name,
             };
 
