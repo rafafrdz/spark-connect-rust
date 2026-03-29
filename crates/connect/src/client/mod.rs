@@ -36,6 +36,8 @@ use arrow_ipc::reader::StreamReader;
 
 use uuid::Uuid;
 
+use futures_util::stream;
+
 use crate::errors::SparkError;
 
 mod builder;
@@ -354,6 +356,27 @@ where
         let mut client = self.stub.write().await;
 
         let resp = client.config(operation).await?.into_inner();
+
+        Ok(resp)
+    }
+
+    pub async fn add_artifacts(
+        &self,
+        artifacts: Vec<spark::add_artifacts_request::SingleChunkArtifact>,
+    ) -> Result<spark::AddArtifactsResponse, SparkError> {
+        let batch = spark::add_artifacts_request::Batch { artifacts };
+
+        let req = spark::AddArtifactsRequest {
+            session_id: self.session_id(),
+            user_context: self.user_context.clone(),
+            client_type: self.builder.user_agent.clone(),
+            payload: Some(spark::add_artifacts_request::Payload::Batch(batch)),
+        };
+
+        let mut client = self.stub.write().await;
+
+        let stream = stream::once(async { req });
+        let resp = client.add_artifacts(stream).await?.into_inner();
 
         Ok(resp)
     }
