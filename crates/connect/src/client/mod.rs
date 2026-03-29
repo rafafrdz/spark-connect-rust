@@ -540,6 +540,22 @@ where
         Ok(self.handler.clone())
     }
 
+    /// Execute a plan and return the result batches without concatenating them.
+    /// This avoids loading all data into a single RecordBatch, which is useful
+    /// for large result sets.
+    pub async fn to_arrow_batches(
+        &mut self,
+        plan: spark::Plan,
+    ) -> Result<Vec<RecordBatch>, SparkError> {
+        let mut req = self.execute_plan_request_with_metadata();
+
+        req.plan = Some(plan);
+
+        self.execute_and_fetch(req).await?;
+
+        Ok(self.handler.batches.clone())
+    }
+
     #[allow(clippy::wrong_self_convention)]
     pub async fn to_arrow(&mut self, plan: spark::Plan) -> Result<RecordBatch, SparkError> {
         let mut req = self.execute_plan_request_with_metadata();

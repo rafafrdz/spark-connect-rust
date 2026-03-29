@@ -206,6 +206,17 @@ impl DataFrame {
         self.spark_session.client().to_arrow(plan).await
     }
 
+    /// Returns an iterator of [RecordBatch]es from the [DataFrame] without
+    /// loading all results into memory at once.
+    ///
+    /// Unlike [collect], which concatenates all batches into a single RecordBatch,
+    /// this method returns each batch as it was received from the server,
+    /// allowing processing of large datasets without OOM.
+    pub async fn to_local_iterator(self) -> Result<Vec<RecordBatch>, SparkError> {
+        let plan = self.plan.plan_root();
+        self.spark_session.client().to_arrow_batches(plan).await
+    }
+
     /// Retrieves the names of all columns in the [DataFrame] as a `Vec<String>`.
     /// The order of the column names in the list reflects their order in the [DataFrame].
     pub async fn columns(self) -> Result<Vec<String>, SparkError> {
