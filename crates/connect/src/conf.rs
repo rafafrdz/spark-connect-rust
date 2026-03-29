@@ -130,6 +130,13 @@ impl RunTimeConfig {
         Ok(val)
     }
 
+    /// Get a configuration value by key, returning an error if not set.
+    ///
+    /// This is a convenience method equivalent to `get(key, None)`.
+    pub async fn get_value(&mut self, key: &str) -> Result<String, SparkError> {
+        self.get(key, None).await
+    }
+
     /// Indicates whether the configuration property with the given key is modifiable in the current session.
     pub async fn is_modifable(&mut self, key: &str) -> Result<bool, SparkError> {
         let op_type = spark::config_request::operation::OpType::IsModifiable(
