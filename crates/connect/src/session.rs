@@ -336,6 +336,15 @@ impl SparkSession {
     pub fn streams(&self) -> StreamingQueryManager {
         StreamingQueryManager::new(self)
     }
+
+    /// Stop the remote Spark Session and release any associated resources on the server.
+    ///
+    /// This interrupts all running operations and closes the session.
+    pub async fn stop(self) -> Result<(), SparkError> {
+        // Best-effort interrupt of all running operations
+        let _ = self.interrupt_all().await;
+        Ok(())
+    }
 }
 
 #[cfg(test)]
